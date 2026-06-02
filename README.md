@@ -59,6 +59,9 @@ Markoffset includes CommonMark and GitHub Flavored Markdown presets:
 
 ```ts
 import { commonmarkParser, gfmParser } from '@saturn9/markoffset';
+// Or import from explicit preset subpaths:
+// import { commonmarkParser } from '@saturn9/markoffset/presets/commonmark';
+// import { gfmParser } from '@saturn9/markoffset/presets/gfm';
 
 const commonmarkTokens = commonmarkParser.parse(markdown);
 const gfmTokens = gfmParser.parse(markdown);
@@ -99,7 +102,7 @@ rules, inline rules, delimiter rules, and document extensions.
 
 ```ts
 import { commonmarkParser } from '@saturn9/markoffset';
-import type { DelimiterRule } from '@saturn9/markoffset';
+import type { DelimiterRule } from '@saturn9/markoffset/core';
 
 const highlight: DelimiterRule = {
     name: 'highlight',
@@ -115,6 +118,44 @@ export const parser = commonmarkParser.extend({
 
 For lower-level composition, `createParser` accepts arrays of `BlockRule`,
 `InlineRule`, `DelimiterRule`, and `ParserExtension` values.
+
+```ts
+import { createParser } from '@saturn9/markoffset/core';
+import {
+    createBlockquoteRule,
+    createListRule,
+    fence,
+    heading,
+    hr,
+} from '@saturn9/markoffset/plugins/block';
+import {
+    autolink,
+    codeInline,
+    image,
+    link,
+    strongAsteriskDelimiter,
+} from '@saturn9/markoffset/plugins/inline';
+import { createLinkReferenceExtension } from '@saturn9/markoffset/plugins/references';
+
+export const parser = createParser({
+    block: [heading, fence, createBlockquoteRule(), createListRule(), hr],
+    inline: [strongAsteriskDelimiter, codeInline, image, link, autolink],
+    extensions: [createLinkReferenceExtension()],
+});
+```
+
+Public subpaths include:
+
+- `@saturn9/markoffset/core`
+- `@saturn9/markoffset/incremental`
+- `@saturn9/markoffset/plugins`
+- `@saturn9/markoffset/plugins/block`
+- `@saturn9/markoffset/plugins/inline`
+- `@saturn9/markoffset/plugins/references`
+- `@saturn9/markoffset/plugins/footnotes`
+- `@saturn9/markoffset/plugins/tagfilter`
+- `@saturn9/markoffset/presets/commonmark`
+- `@saturn9/markoffset/presets/gfm`
 
 ## Implementation notes
 
