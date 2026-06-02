@@ -142,3 +142,7 @@ Benchmarks are available for full-document and incremental parsing:
 npm run bench
 npm run bench:incremental
 ```
+
+## License
+
+MIT
