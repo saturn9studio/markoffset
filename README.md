@@ -24,6 +24,9 @@ connection back to the original source text.
 npm install @saturn9/markoffset
 ```
 
+Markoffset is published as a native ESM package for Node 18+ and modern
+bundlers.
+
 ## Quick start
 
 ```ts
@@ -174,7 +177,7 @@ output, and finalize the emitted token tree.
 ```sh
 npm ci
 npm run build
-npm run test -- --runInBand
+npm run test
 ```
 
 Benchmarks are available for full-document and incremental parsing:

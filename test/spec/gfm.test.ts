@@ -1,7 +1,9 @@
-import * as fs from 'fs';
-import * as path from 'path';
-import { gfmParser } from '../../src/presets/gfm';
-import { renderToHtml } from './html-renderer';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { describe, expect, test } from 'vitest';
+import { gfmParser } from '../../src/presets/gfm.js';
+import { renderToHtml } from './html-renderer.js';
 
 interface SpecTest {
     markdown: string;
@@ -13,6 +15,7 @@ interface SpecTest {
 
 const SUPPORTED_GFM_EXTENSIONS = new Set(['table', 'strikethrough', 'autolink']);
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const specPath = path.join(__dirname, 'gfm.json');
 const spec: SpecTest[] = JSON.parse(fs.readFileSync(specPath, 'utf-8'));
 const extensionsPath = path.join(__dirname, 'gfm-extensions.json');

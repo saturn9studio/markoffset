@@ -1,5 +1,5 @@
-import { BlockRule, Token } from '../../core/types';
-import { decodeEntities } from '../../core/entities';
+import { BlockRule, Token } from '../../core/types.js';
+import { decodeEntities } from '../../core/entities.js';
 
 export const fence: BlockRule = {
     name: 'fence',

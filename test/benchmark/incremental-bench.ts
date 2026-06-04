@@ -1,6 +1,6 @@
 import { Bench } from 'tinybench';
-import { commonmarkParser as parser } from '../../src/presets/commonmark';
-import { parseDocument, reparse, Change } from '../../src/incremental';
+import { commonmarkParser as parser } from '../../src/presets/commonmark.js';
+import { parseDocument, reparse, Change } from '../../src/incremental.js';
 
 // Generate a large (~30k word) document to make the cost of a full reparse per
 // keystroke obvious.

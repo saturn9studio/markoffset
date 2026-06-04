@@ -1,5 +1,5 @@
-import { BlockRule, Token } from '../../core/types';
-import { filterDisallowedHtmlTags } from '../tagfilter';
+import { BlockRule, Token } from '../../core/types.js';
+import { filterDisallowedHtmlTags } from '../tagfilter.js';
 
 const BLOCK_TAGS = new Set([
     'address', 'article', 'aside', 'base', 'basefont', 'blockquote', 'body', 'caption', 'center',

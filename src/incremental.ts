@@ -1,4 +1,4 @@
-import { Parser, Token } from './core/types';
+import { Parser, Token } from './core/types.js';
 
 /**
  * A text edit: replace the half-open range [from, to) of the OLD source with

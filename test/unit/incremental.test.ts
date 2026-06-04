@@ -1,7 +1,8 @@
-import { commonmarkParser as parser } from '../../src/presets/commonmark';
-import { gfmParser } from '../../src/presets/gfm';
-import { parseDocument, reparse, Change } from '../../src/incremental';
-import { Parser, Token } from '../../src/core/types';
+import { describe, expect, test } from 'vitest';
+import { commonmarkParser as parser } from '../../src/presets/commonmark.js';
+import { gfmParser } from '../../src/presets/gfm.js';
+import { parseDocument, reparse, Change } from '../../src/incremental.js';
+import { Parser, Token } from '../../src/core/types.js';
 
 /** Apply a change to a source string the same way the editor would. */
 function applyChange(src: string, change: Change): string {

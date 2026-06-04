@@ -1,5 +1,5 @@
-import { InlineContext, InlineRule, Token } from '../../core/types';
-import { getFootnoteState } from '../footnotes';
+import { InlineContext, InlineRule, Token } from '../../core/types.js';
+import { getFootnoteState } from '../footnotes.js';
 
 export const footnote: InlineRule = {
     name: 'footnote',

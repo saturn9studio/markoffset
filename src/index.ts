@@ -1,8 +1,8 @@
-export { createParser } from './core/parser';
-export { commonmarkParser } from './presets/commonmark';
-export { gfmParser } from './presets/gfm';
-export { parseDocument, reparse } from './incremental';
-export type { Change, ParseState } from './incremental';
+export { createParser } from './core/parser.js';
+export { commonmarkParser } from './presets/commonmark.js';
+export { gfmParser } from './presets/gfm.js';
+export { parseDocument, reparse } from './incremental.js';
+export type { Change, ParseState } from './incremental.js';
 export type {
     Token,
     BlockContext,
@@ -16,5 +16,5 @@ export type {
     ParserExtensionState,
     BlockScanner,
     InlineContext,
-} from './core/types';
-export { isDelimiterRule } from './core/types';
+} from './core/types.js';
+export { isDelimiterRule } from './core/types.js';

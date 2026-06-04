@@ -1,4 +1,4 @@
-import { Token, DelimiterRule } from './types';
+import { Token, DelimiterRule } from './types.js';
 
 // Delimiter run encountered during inline scanning
 interface DelimRun {

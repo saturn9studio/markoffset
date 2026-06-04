@@ -1,9 +1,8 @@
-import { BlockScanner } from './block-scanner';
-import { decodeEntities } from './entities';
-import { InlineContext } from './inline-context';
+import { BlockScanner } from './block-scanner.js';
+import { decodeEntities } from './entities.js';
+import { InlineContext } from './inline-context.js';
 import {
     BlockRule,
-    AnyInlineRule,
     DelimiterRule,
     InlineRule,
     Parser,
@@ -12,8 +11,8 @@ import {
     Token,
     isDelimiterRule,
     BlockContext,
-} from './types';
-import { runDelimiterStack, RawItem } from './delimiter-stack';
+} from './types.js';
+import { runDelimiterStack, RawItem } from './delimiter-stack.js';
 
 export function createParser(config: ParserConfig): Parser {
     const blockRules = [...(config.block || [])].sort((a, b) => b.priority - a.priority);

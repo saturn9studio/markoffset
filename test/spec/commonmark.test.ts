@@ -1,7 +1,9 @@
-import * as fs from 'fs';
-import * as path from 'path';
-import { commonmarkParser } from '../../src/presets/commonmark';
-import { renderToHtml } from './html-renderer';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { describe, expect, test } from 'vitest';
+import { commonmarkParser } from '../../src/presets/commonmark.js';
+import { renderToHtml } from './html-renderer.js';
 
 interface SpecTest {
     markdown: string;
@@ -10,6 +12,7 @@ interface SpecTest {
     section: string;
 }
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const specPath = path.join(__dirname, 'spec.json');
 const spec: SpecTest[] = JSON.parse(fs.readFileSync(specPath, 'utf-8'));
 

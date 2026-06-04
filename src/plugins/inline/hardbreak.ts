@@ -1,4 +1,4 @@
-import { InlineRule, Token, InlineContext } from '../../core/types';
+import { InlineRule, Token, InlineContext } from '../../core/types.js';
 
 // Hard line breaks: two or more spaces at end of line before newline,
 // or backslash at end of line before newline.

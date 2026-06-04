@@ -1,4 +1,4 @@
-import { DelimiterMatch, DelimiterRule } from '../../core/types';
+import { DelimiterMatch, DelimiterRule } from '../../core/types.js';
 
 const commonmarkCanMatch = (match: DelimiterMatch): boolean => {
     if (!match.openerCanOpenAndClose && !match.closerCanOpenAndClose) return true;

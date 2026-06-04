@@ -1,4 +1,5 @@
-import { commonmarkParser } from '../../src/presets/commonmark';
+import { describe, expect, it } from 'vitest';
+import { commonmarkParser } from '../../src/presets/commonmark.js';
 
 describe('list_item block children have document-absolute offsets', () => {
     it('flat list: paragraph child starts after the list marker', () => {
