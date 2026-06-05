@@ -1,4 +1,4 @@
-import { InlineRule, Token } from '../../core/types';
+import { InlineRule, Token } from '../../core/types.js';
 
 interface AutolinkMatch {
     end: number;

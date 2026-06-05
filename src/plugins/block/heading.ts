@@ -1,4 +1,4 @@
-import { BlockRule, Token } from '../../core/types';
+import { BlockRule, Token } from '../../core/types.js';
 
 export const heading: BlockRule = {
     name: 'heading',

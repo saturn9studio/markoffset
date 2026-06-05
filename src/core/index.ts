@@ -1,4 +1,4 @@
-export { createParser } from './parser';
+export { createParser } from './parser.js';
 export type {
     AnyInlineRule,
     BlockContext,
@@ -16,5 +16,5 @@ export type {
     Token,
     TokenAttrs,
     TokenAttrValue,
-} from './types';
-export { isDelimiterRule } from './types';
+} from './types.js';
+export { isDelimiterRule } from './types.js';

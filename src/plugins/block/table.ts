@@ -1,4 +1,4 @@
-import { BlockContext, BlockRule, BlockScanner, Token } from '../../core/types';
+import { BlockContext, BlockRule, BlockScanner, Token } from '../../core/types.js';
 
 type Alignment = 'left' | 'center' | 'right';
 

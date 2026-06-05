@@ -1,4 +1,4 @@
-import { BlockContext, BlockRule, Token, BlockScanner as IBlockScanner } from '../../core/types';
+import { BlockContext, BlockRule, Token, BlockScanner as IBlockScanner } from '../../core/types.js';
 
 /**
  * Create a blockquote rule that recursively parses its content using the given block parser.

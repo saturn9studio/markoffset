@@ -1,8 +1,8 @@
 import { Bench } from 'tinybench';
 import MarkdownIt from 'markdown-it';
 import { marked } from 'marked';
-import { commonmarkParser } from '../../src/presets/commonmark';
-import { gfmParser } from '../../src/presets/gfm';
+import { commonmarkParser } from '../../src/presets/commonmark.js';
+import { gfmParser } from '../../src/presets/gfm.js';
 
 // Generate a synthetic ~5k word document for benchmarking
 const doc = generateMarkdownDoc(5000);

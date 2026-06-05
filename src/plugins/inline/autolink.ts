@@ -1,4 +1,4 @@
-import { InlineRule, Token, InlineContext } from '../../core/types';
+import { InlineRule, Token, InlineContext } from '../../core/types.js';
 
 // Autolinks: <url> or <email>
 // Spec: absolute URIs or email addresses enclosed in < and >

@@ -1,4 +1,4 @@
-import { InlineContext, ParserExtension, Token } from '../core/types';
+import { InlineContext, ParserExtension, Token } from '../core/types.js';
 
 const FOOTNOTE_EXTENSION_KEY = 'gfm-footnotes';
 

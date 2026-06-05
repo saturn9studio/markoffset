@@ -1,4 +1,4 @@
-import { DelimiterMatch, DelimiterRule } from '../../core/types';
+import { DelimiterMatch, DelimiterRule } from '../../core/types.js';
 
 const isGfmStrikethroughRun = (match: DelimiterMatch): boolean =>
     match.openerRunLength === match.closerRunLength && match.openerRunLength <= 2;

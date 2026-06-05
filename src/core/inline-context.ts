@@ -1,4 +1,4 @@
-import { InlineContext as IInlineContext, Token } from './types';
+import { InlineContext as IInlineContext, Token } from './types.js';
 
 export class InlineContext implements IInlineContext {
     src: string;

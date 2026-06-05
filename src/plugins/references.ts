@@ -1,5 +1,5 @@
-import { decodeEntities } from '../core/entities';
-import { InlineContext, ParserExtension } from '../core/types';
+import { decodeEntities } from '../core/entities.js';
+import { InlineContext, ParserExtension } from '../core/types.js';
 
 const LINK_REFERENCES_EXTENSION_KEY = 'link-references';
 

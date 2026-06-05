@@ -1,5 +1,6 @@
-import { commonmarkParser } from '../../src/presets/commonmark';
-import { renderToHtml } from './html-renderer';
+import { describe, expect, it } from 'vitest';
+import { commonmarkParser } from '../../src/presets/commonmark.js';
+import { renderToHtml } from './html-renderer.js';
 
 // These tests guard the micro-optimizations applied to the parser hot paths
 // (eager CRLF normalization, the "interesting char" lookup table, the tight

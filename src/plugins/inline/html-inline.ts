@@ -1,5 +1,5 @@
-import { InlineContext, InlineRule, Token } from '../../core/types';
-import { filterDisallowedHtmlTags } from '../tagfilter';
+import { InlineContext, InlineRule, Token } from '../../core/types.js';
+import { filterDisallowedHtmlTags } from '../tagfilter.js';
 
 export const htmlInline = createHtmlInlineRule(false);
 export const gfmHtmlInline = createHtmlInlineRule(true);

@@ -1,4 +1,4 @@
-import { BlockRule, Token } from '../../core/types';
+import { BlockRule, Token } from '../../core/types.js';
 
 export const indentedCode: BlockRule = {
     name: 'indented-code',

@@ -1,4 +1,4 @@
-import { Token } from '../../src/core/types';
+import type { Token } from '../../src/core/types.js';
 
 function escapeHtml(str: string): string {
     return str
@@ -44,6 +44,13 @@ function renderTokens(tokens: Token[], tight = false): string {
         html += renderToken(token, tight);
     }
     return html;
+}
+
+function renderFootnoteBackref(id: string, number: number, refIndex: number): string {
+    const refId = refIndex === 1 ? `fnref-${id}` : `fnref-${id}-${refIndex}`;
+    const idx = refIndex === 1 ? `${number}` : `${number}-${refIndex}`;
+    const suffix = refIndex === 1 ? '' : `<sup class="footnote-ref">${refIndex}</sup>`;
+    return `<a href="#${escapeHtml(refId)}" class="footnote-backref" data-footnote-backref data-footnote-backref-idx="${escapeHtml(idx)}" aria-label="Back to reference ${escapeHtml(idx)}">↩${suffix}</a>`;
 }
 
 function renderToken(token: Token, tight = false): string {
@@ -186,13 +193,6 @@ function renderToken(token: Token, tight = false): string {
 
         case 'html_inline': {
             return token.content ?? '';
-        }
-
-        function renderFootnoteBackref(id: string, number: number, refIndex: number): string {
-            const refId = refIndex === 1 ? `fnref-${id}` : `fnref-${id}-${refIndex}`;
-            const idx = refIndex === 1 ? `${number}` : `${number}-${refIndex}`;
-            const suffix = refIndex === 1 ? '' : `<sup class="footnote-ref">${refIndex}</sup>`;
-            return `<a href="#${escapeHtml(refId)}" class="footnote-backref" data-footnote-backref data-footnote-backref-idx="${escapeHtml(idx)}" aria-label="Back to reference ${escapeHtml(idx)}">↩${suffix}</a>`;
         }
 
         case 'table': {

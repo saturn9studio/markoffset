@@ -1,4 +1,4 @@
-import { BlockScanner as IBlockScanner } from './types';
+import { BlockScanner as IBlockScanner } from './types.js';
 
 export class BlockScanner implements IBlockScanner {
     src: string;

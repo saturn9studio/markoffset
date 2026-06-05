@@ -1,4 +1,4 @@
-import { BlockContext, BlockRule, Token, BlockScanner as IBlockScanner } from '../../core/types';
+import { BlockContext, BlockRule, Token, BlockScanner as IBlockScanner } from '../../core/types.js';
 
 interface ListItemInfo {
     ordered: boolean;
@@ -70,7 +70,6 @@ function getListItemInfo(line: string): ListItemInfo | null {
         const next = line.charCodeAt(numEnd + 1);
         if (numEnd + 1 >= line.length) {
             // Empty list item
-            const markerWidth = numEnd + 1 - 0 + 1; // include space
             return {
                 ordered: true,
                 startNum: parseInt(line.slice(i, numEnd), 10),

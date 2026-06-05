@@ -1,5 +1,5 @@
-import { InlineRule, Token, InlineContext } from '../../core/types';
-import { getLinkReference, parseLinkDestination, parseLinkTitle } from '../references';
+import { InlineRule, Token, InlineContext } from '../../core/types.js';
+import { getLinkReference, parseLinkDestination, parseLinkTitle } from '../references.js';
 
 export const image: InlineRule = {
     name: 'image',

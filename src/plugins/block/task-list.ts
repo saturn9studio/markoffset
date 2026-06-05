@@ -1,5 +1,5 @@
-import { BlockContext, BlockRule, Token } from '../../core/types';
-import { createListRule } from './list';
+import { BlockContext, BlockRule, Token } from '../../core/types.js';
+import { createListRule } from './list.js';
 
 export function createTaskListRule(): BlockRule {
     const listRule = createListRule();

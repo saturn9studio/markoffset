@@ -1,4 +1,4 @@
-import { InlineRule, Token, InlineContext } from '../../core/types';
+import { InlineRule, Token, InlineContext } from '../../core/types.js';
 
 export const codeInline: InlineRule = {
     name: 'code_inline',
