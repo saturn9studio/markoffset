@@ -8,6 +8,12 @@ interface SourceLine {
     text: string;
 }
 
+interface SourceCell {
+    start: number;
+    end: number;
+    text: string;
+}
+
 interface DelimiterCell {
     align?: Alignment;
 }
@@ -18,12 +24,12 @@ export function createTableRule(): BlockRule {
         priority: 80,
         startChars: '|',
         requiredChars: '|',
-        match(line: string, scanner: BlockScanner): boolean {
-            return parseTableHeader(line, scanner) !== null;
+        match(_line: string, scanner: BlockScanner): boolean {
+            return parseTableHeader(currentSourceLine(scanner), scanner) !== null;
         },
         parse(scanner: BlockScanner, context: BlockContext): Token {
             const firstLine = currentSourceLine(scanner);
-            const header = parseTableHeader(firstLine.text, scanner);
+            const header = parseTableHeader(firstLine, scanner);
             if (header === null) {
                 throw new Error('table parser invoked without a table header');
             }
@@ -37,7 +43,7 @@ export function createTableRule(): BlockRule {
             while (!scanner.atEnd()) {
                 const line = currentSourceLine(scanner);
                 if (!isTableBodyLine(line.text)) break;
-                bodyRows.push(createTableRow('table_row', 'table_cell', line, normalizeBodyCells(line.text, header.cells.length), header.delimiters, context.parseInline));
+                bodyRows.push(createTableRow('table_row', 'table_cell', line, normalizeBodyCells(line, header.cells.length), header.delimiters, context.parseInline));
                 end = line.end;
                 scanner.advance();
             }
@@ -69,16 +75,17 @@ export function createTableRule(): BlockRule {
     };
 }
 
-function parseTableHeader(line: string, scanner: BlockScanner): { cells: string[]; delimiters: DelimiterCell[] } | null {
+function parseTableHeader(line: SourceLine, scanner: BlockScanner): { cells: SourceCell[]; delimiters: DelimiterCell[] } | null {
     const nextLine = readLine(scanner.src, scanner.lineEnd + 1);
     if (nextLine === null || isBlankLine(nextLine.text)) return null;
+    if (!line.text.includes('|')) return null;
 
     const cells = splitCells(line);
     if (cells.length === 0) return null;
-    const delimiterCells = splitCells(nextLine.text);
+    const delimiterCells = splitCells(nextLine);
     const delimiters: DelimiterCell[] = [];
     for (let index = 0; index < delimiterCells.length; index++) {
-        const delimiter = parseDelimiterCell(delimiterCells[index]);
+        const delimiter = parseDelimiterCell(delimiterCells[index].text);
         if (delimiter === null) return null;
         delimiters.push(delimiter);
     }
@@ -108,18 +115,19 @@ function createTableRow(
     kind: string,
     cellKind: string,
     line: SourceLine,
-    cells: string[],
+    cells: SourceCell[],
     delimiters: DelimiterCell[],
     parseInline: (src: string) => Token[]
 ): Token {
     const children: Token[] = [];
     for (let index = 0; index < cells.length; index++) {
-        const content = normalizeCellContent(cells[index]);
+        const cell = cells[index];
+        const content = normalizeCellContent(cell.text);
         const align = delimiters[index]?.align;
         children.push({
             kind: cellKind,
-            start: line.start,
-            end: line.end,
+            start: cell.start,
+            end: cell.end,
             content,
             attrs: align === undefined ? undefined : { align },
             children: parseInline(content),
@@ -134,10 +142,13 @@ function createTableRow(
     };
 }
 
-function normalizeBodyCells(line: string, width: number): string[] {
+function normalizeBodyCells(line: SourceLine, width: number): SourceCell[] {
     const cells = splitCells(line);
     if (cells.length >= width) return cells.slice(0, width);
-    while (cells.length < width) cells.push('');
+    const anchor = bodyCellAnchor(line);
+    while (cells.length < width) {
+        cells.push({ start: anchor, end: anchor, text: '' });
+    }
     return cells;
 }
 
@@ -191,32 +202,57 @@ function isSpaceTabOrEnd(line: string, index: number): boolean {
     return char === 32 || char === 9;
 }
 
-function splitCells(line: string): string[] {
-    const trimmed = stripOptionalOuterPipes(stripIndent(line).trimEnd());
-    const cells: string[] = [];
-    let cellStart = 0;
+function cellContentBounds(line: string): { start: number; end: number } {
+    let start = 0;
+    while (start < 3 && start < line.length && line.charCodeAt(start) === 32) start++;
+    let end = line.length;
+    while (end > start && (line.charCodeAt(end - 1) === 32 || line.charCodeAt(end - 1) === 9)) end--;
+    if (line[start] === '|') start++;
+    if (end > start && line[end - 1] === '|' && !isEscaped(line, end - 1)) end--;
+    return { start, end };
+}
+
+function sourceCell(line: SourceLine, start: number, end: number): SourceCell {
+    while (start < end && (line.text.charCodeAt(start) === 32 || line.text.charCodeAt(start) === 9)) start++;
+    while (end > start && (line.text.charCodeAt(end - 1) === 32 || line.text.charCodeAt(end - 1) === 9)) end--;
+    return {
+        start: line.start + start,
+        end: line.start + end,
+        text: line.text.slice(start, end),
+    };
+}
+
+function bodyCellAnchor(line: SourceLine): number {
+    const bounds = cellContentBounds(line.text);
+    return line.start + bounds.end;
+}
+
+function splitCells(line: SourceLine): SourceCell[] {
+    const bounds = cellContentBounds(line.text);
+    const cells: SourceCell[] = [];
+    let cellStart = bounds.start;
     let codeFence = '';
 
-    for (let i = 0; i < trimmed.length; i++) {
-        const ch = trimmed[i];
+    for (let i = bounds.start; i < bounds.end; i++) {
+        const ch = line.text[i];
         if (ch === '\\') {
             i++;
             continue;
         }
         if (ch === '`') {
             const runStart = i;
-            while (i + 1 < trimmed.length && trimmed[i + 1] === '`') i++;
-            const run = trimmed.slice(runStart, i + 1);
+            while (i + 1 < bounds.end && line.text[i + 1] === '`') i++;
+            const run = line.text.slice(runStart, i + 1);
             codeFence = codeFence === run ? '' : (codeFence === '' ? run : codeFence);
             continue;
         }
         if (ch === '|' && codeFence === '') {
-            cells.push(trimmed.slice(cellStart, i));
+            cells.push(sourceCell(line, cellStart, i));
             cellStart = i + 1;
         }
     }
 
-    cells.push(trimmed.slice(cellStart));
+    cells.push(sourceCell(line, cellStart, bounds.end));
     return cells;
 }
 
@@ -232,14 +268,6 @@ function isBlankLine(line: string): boolean {
         if (char !== 32 && char !== 9) return false;
     }
     return true;
-}
-
-function stripOptionalOuterPipes(line: string): string {
-    let start = 0;
-    let end = line.length;
-    if (line[start] === '|') start++;
-    if (end > start && line[end - 1] === '|' && !isEscaped(line, end - 1)) end--;
-    return line.slice(start, end);
 }
 
 function isEscaped(src: string, index: number): boolean {

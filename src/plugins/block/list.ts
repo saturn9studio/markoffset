@@ -150,7 +150,26 @@ function shiftBlockChildren(
         // so their list_item block children are also made document-absolute.
         children: (t.kind === 'bullet_list' || t.kind === 'ordered_list') && t.children
             ? shiftListItemChildren(t.children, contentLines, sourceLineStarts)
+            : t.kind === 'table' && t.children
+                ? shiftTableChildren(t.children, contentLines, sourceLineStarts)
             : t.children,
+    }));
+}
+
+function shiftTableChildren(
+    tokens: Token[],
+    contentLines: string[],
+    sourceLineStarts: number[],
+): Token[] {
+    return tokens.map(token => ({
+        ...token,
+        start: innerToSource(token.start, contentLines, sourceLineStarts),
+        end: innerToSource(token.end, contentLines, sourceLineStarts),
+        children: token.children &&
+            token.kind !== 'table_cell' &&
+            token.kind !== 'table_header_cell'
+            ? shiftTableChildren(token.children, contentLines, sourceLineStarts)
+            : token.children,
     }));
 }
 

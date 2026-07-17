@@ -113,6 +113,22 @@ describe('incremental reparse — fundamental invariant', () => {
         expectInvariant(src, { from, to: from, insert: 'Z' });
     });
 
+    test('edit inside a GFM table recomputes structural ranges', () => {
+        const src = '| A | B |\n| --- | --- |\n| one | two |\n';
+        const from = src.indexOf('two');
+        expectInvariant(src, { from, to: from + 3, insert: 'second' }, gfmParser);
+    });
+
+    test('edit before a GFM table shifts reused structural ranges', () => {
+        const src = 'before\n\n| A | B |\n| --- | --- |\n| one | two |\n';
+        expectInvariant(src, { from: 0, to: 0, insert: 'X' }, gfmParser);
+    });
+
+    test('edit before a list-nested GFM table shifts structural ranges once', () => {
+        const src = '- item\n\n  | A | B |\n  | --- | --- |\n  | one | two |\n';
+        expectInvariant(src, { from: 0, to: 0, insert: 'pre\n\n' }, gfmParser);
+    });
+
     test('edit inside a blockquote keeps content-relative child offsets', () => {
         const src = '> line one\n> line two\n\ntrailing paragraph\n';
         const from = src.indexOf('line one') + 4;
