@@ -58,6 +58,16 @@ function shiftChildren(parentKind: string, children: Token[], delta: number): To
         // children are block tokens — document-absolute, recurse.
         return children.map(child => shiftToken(child, delta));
     }
+    if (
+        parentKind === 'table' ||
+        parentKind === 'table_head' ||
+        parentKind === 'table_body' ||
+        parentKind === 'table_header' ||
+        parentKind === 'table_row'
+    ) {
+        // Table sections, rows, and cells all carry document-absolute ranges.
+        return children.map(child => shiftToken(child, delta));
+    }
     if (parentKind === 'blockquote') {
         // blockquote children come from parseBlocks(innerSrc) — content-relative, never shift.
         return children;
