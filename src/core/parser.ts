@@ -344,19 +344,25 @@ export function createParser(config: ParserConfig): Parser {
                 };
                 if (setextLevel !== undefined) token.level = setextLevel;
                 if (lines.length === 1) {
-                    token.children = fixedOutputOrigin === undefined
-                        ? parseInlineContent(
+                    if (fixedOutputOrigin === undefined) {
+                        token.children = parseInlineContent(
                             content,
                             0,
                             content.length,
                             extensions,
-                        )
-                        : parseInlineContent(
+                        );
+                        shiftTokenTreeInPlace(
+                            token.children,
+                            lineSourceStarts[0] - start,
+                        );
+                    } else {
+                        token.children = parseInlineContent(
                             scanner.src,
                             lineSourceStarts[0],
                             lineSourceStarts[0] + content.length,
                             extensions,
                         );
+                    }
                 } else {
                     const lineSources = lines.flatMap((line, index) => {
                         const source = contiguousSource(
@@ -487,6 +493,15 @@ export function createParser(config: ParserConfig): Parser {
         token.start = 0;
         token.end -= blockStart;
         return token;
+    }
+
+    function shiftTokenTreeInPlace(tokens: Token[], delta: number): void {
+        if (delta === 0) return;
+        for (const token of tokens) {
+            token.start += delta;
+            token.end += delta;
+            if (token.children) shiftTokenTreeInPlace(token.children, delta);
+        }
     }
 
     function prepareExtensions(src: string, nested: boolean): ParserExtensionState[] {

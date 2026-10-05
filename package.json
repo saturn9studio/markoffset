@@ -1,6 +1,6 @@
 {
   "name": "@saturn9/markoffset",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Fast, plugin-based Markdown parser",
   "license": "MIT",
   "author": "Saturn9 LLC",

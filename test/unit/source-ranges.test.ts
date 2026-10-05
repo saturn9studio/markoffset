@@ -59,6 +59,18 @@ describe('resolved token source ranges', () => {
         views.forEach(view => assertContained(view, undefined));
     });
 
+    test('maps inline children after leading paragraph indentation', () => {
+        const markdown = '  ![Alt](image.png "Title")';
+        const views = tokenViews(commonmarkParser.parse(markdown));
+        const image = findView(views, 'image');
+        const text = findView(image?.children ?? [], 'text');
+
+        expect(markdown.slice(image?.start, image?.end))
+            .toBe('![Alt](image.png "Title")');
+        expect(markdown.slice(text?.start, text?.end)).toBe('Alt');
+        views.forEach(view => assertContained(view, undefined));
+    });
+
     test('returns document-absolute views for bounded parses', () => {
         const markdown = 'before\n\n***target***\n\nafter';
         const from = markdown.indexOf('***target***');
