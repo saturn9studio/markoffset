@@ -56,7 +56,7 @@ export function createBlockquoteRule(): BlockRule {
                     canLazyContinueParagraph = canStartLazyParagraph(content);
                     hasLazyContinuation = false;
                     scanner.advance();
-                } else if (line.trim() === '') {
+                } else if (isBlankLine(line)) {
                     // Check if the next non-blank line is a blockquote continuation
                     // Per spec, a blank line interrupts a blockquote
                     break;
@@ -105,10 +105,28 @@ export function createBlockquoteRule(): BlockRule {
 }
 
 function canStartLazyParagraph(content: string): boolean {
-    const trimmedStart = content.trimStart();
+    const trimmedStart = trimAsciiWhitespaceStart(content);
     if (trimmedStart === '') return false;
     if (/^(?:#{1,6}(?:[ \t]|$)|`{3,}|~{3,}|[*_ -](?:[ \t]*[*_ -]){2,}[ \t]*$)/.test(trimmedStart)) return false;
     if (/^ {4}/.test(content)) return false;
+    return true;
+}
+
+function trimAsciiWhitespaceStart(content: string): string {
+    let start = 0;
+    while (start < content.length) {
+        const char = content.charCodeAt(start);
+        if (char !== 32 && char !== 9) break;
+        start++;
+    }
+    return content.slice(start);
+}
+
+function isBlankLine(line: string): boolean {
+    for (let index = 0; index < line.length; index++) {
+        const char = line.charCodeAt(index);
+        if (char !== 32 && char !== 9) return false;
+    }
     return true;
 }
 
