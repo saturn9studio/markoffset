@@ -1,4 +1,9 @@
 import { BlockContext, BlockRule, Token, BlockScanner as IBlockScanner } from '../../core/types.js';
+import {
+    concatenateSources,
+    contiguousSource,
+    transformedSource,
+} from '../../core/mapped-source.js';
 
 interface ListItemInfo {
     ordered: boolean;
@@ -110,96 +115,6 @@ function isSameListType(info: ListItemInfo, other: ListItemInfo): boolean {
     return info.bullet === other.bullet;
 }
 
-/**
- * Map a 0-based offset in innerSrc (the joined content string) to a
- * document-absolute source offset, using the per-line source start positions.
- */
-function innerToSource(innerPos: number, contentLines: string[], sourceLineStarts: number[]): number {
-    let remaining = innerPos;
-    for (let i = 0; i < contentLines.length; i++) {
-        const lineLen = contentLines[i].length;
-        if (remaining <= lineLen) {
-            return sourceLineStarts[i] + remaining;
-        }
-        remaining -= lineLen + 1; // +1 for the '\n' separator in innerSrc
-    }
-    // clamp to end
-    return sourceLineStarts[sourceLineStarts.length - 1] + contentLines[contentLines.length - 1].length;
-}
-
-/**
- * Shift block-level children (produced by parseBlocks on innerSrc) from
- * inner-relative offsets to document-absolute offsets. Inline children
- * (paragraph/heading/fence children) remain content-relative — they are
- * handled differently by the decoration layer and are NOT shifted here.
- * Nested list children are recursed into so their block children are also
- * made document-absolute (the nested list_item start/end themselves are
- * already shifted by this function at the outer level).
- */
-function shiftBlockChildren(
-    tokens: Token[],
-    contentLines: string[],
-    sourceLineStarts: number[],
-): Token[] {
-    return tokens.map(t => ({
-        ...t,
-        start: innerToSource(t.start, contentLines, sourceLineStarts),
-        end:   innerToSource(t.end,   contentLines, sourceLineStarts),
-        // Do NOT shift inline children (paragraph/heading/fence children) —
-        // those remain content-relative. Only recurse into nested list children
-        // so their list_item block children are also made document-absolute.
-        children: (t.kind === 'bullet_list' || t.kind === 'ordered_list') && t.children
-            ? shiftListItemChildren(t.children, contentLines, sourceLineStarts)
-            : t.kind === 'table' && t.children
-                ? shiftTableChildren(t.children, contentLines, sourceLineStarts)
-            : t.children,
-    }));
-}
-
-function shiftTableChildren(
-    tokens: Token[],
-    contentLines: string[],
-    sourceLineStarts: number[],
-): Token[] {
-    return tokens.map(token => ({
-        ...token,
-        start: innerToSource(token.start, contentLines, sourceLineStarts),
-        end: innerToSource(token.end, contentLines, sourceLineStarts),
-        children: token.children &&
-            token.kind !== 'table_cell' &&
-            token.kind !== 'table_header_cell'
-            ? shiftTableChildren(token.children, contentLines, sourceLineStarts)
-            : token.children,
-    }));
-}
-
-/**
- * Shift list_item tokens within a nested list. Each list_item's start/end is
- * shifted from inner-relative to document-absolute, and its own block children
- * are also shifted recursively.
- */
-function shiftListItemChildren(
-    items: Token[],
-    contentLines: string[],
-    sourceLineStarts: number[],
-): Token[] {
-    return items.map(item => ({
-        ...item,
-        start: innerToSource(item.start, contentLines, sourceLineStarts),
-        end:   innerToSource(item.end,   contentLines, sourceLineStarts),
-        // item.children are block children of the nested list_item — also need shifting.
-        // They were produced by parseListItem recursively, which has ALREADY applied
-        // the inner→source mapping for their own innerSrc level. But since the nested
-        // parseListItem was called on a further-nested innerSrc, its children are
-        // relative to that nested innerSrc. The nested parseListItem call will have
-        // applied its own innerToSource mapping, so by the time we see item.children
-        // here they are relative to THIS level's innerSrc — shift them accordingly.
-        children: item.children
-            ? shiftBlockChildren(item.children, contentLines, sourceLineStarts)
-            : undefined,
-    }));
-}
-
 function createListRule(): BlockRule {
     return {
         name: 'list',
@@ -276,6 +191,8 @@ function parseListItem(
     const firstContent = expandLeadingTabs(stripPrefixColumns(firstLine, indent));
     const contentLines: string[] = [firstContent];
     const sourceLineStarts: number[] = [start + info.markerWidth];
+    const sourceLineOriginals: string[] = [firstLine.slice(info.markerWidth)];
+    const sourceLineEnds: number[] = [scanner.currentLineEnd()];
     scanner.advance();
 
     // Collect continuation lines.
@@ -316,6 +233,8 @@ function parseListItem(
                 contentLines.push('');
                 // Blank lines contribute '' content; source starts at the blank line's position.
                 sourceLineStarts.push(pendingBlankSourceStarts[b]);
+                sourceLineOriginals.push('');
+                sourceLineEnds.push(pendingBlankSourceStarts[b]);
             }
             if (pendingBlanks > 0) hasBlankInContent = true;
             pendingBlanks = 0;
@@ -323,7 +242,10 @@ function parseListItem(
             // Record source start for this continuation line (content starts after the indent).
             const continuation = expandLeadingTabs(stripColumns(line, indent));
             contentLines.push(continuation);
-            sourceLineStarts.push(scanner.currentLineStart() + indent);
+            const contentIndex = characterIndexAfterColumns(line, indent);
+            sourceLineStarts.push(scanner.currentLineStart() + contentIndex);
+            sourceLineOriginals.push(line.slice(contentIndex));
+            sourceLineEnds.push(scanner.currentLineEnd());
             if (!isBlankLine(continuation)) allContentBlank = false;
             scanner.advance();
         } else {
@@ -340,6 +262,8 @@ function parseListItem(
             if (pendingBlanks === 0 && contentLines.length > 0 && !isLazyContinuationBreakingLine(line)) {
                 contentLines.push(line);
                 sourceLineStarts.push(scanner.currentLineStart());
+                sourceLineOriginals.push(line);
+                sourceLineEnds.push(scanner.currentLineEnd());
                 if (!isBlankLine(line)) allContentBlank = false;
                 scanner.advance();
                 continue;
@@ -353,17 +277,25 @@ function parseListItem(
     // hadTrailingBlanks indicates blank lines followed this item (before next item)
 
     const end = scanner.currentLineStart() > 0 ? scanner.currentLineStart() - 1 : start;
-    const innerSrc = contentLines.join('\n');
-
-    // Parse block children from the stripped inner content, then remap their
-    // offsets from inner-relative to document-absolute using the line start map.
-    const innerChildren = context.parseBlocks(innerSrc);
-    const children = shiftBlockChildren(innerChildren, contentLines, sourceLineStarts);
+    const contentSources = contentLines.flatMap((content, index) => {
+        const source = transformedSource(
+            content,
+            sourceLineOriginals[index],
+            sourceLineStarts[index],
+        );
+        return index + 1 < contentLines.length
+            ? [source, contiguousSource('\n', sourceLineEnds[index])]
+            : [source];
+    });
+    const children = context.parseBlocks(concatenateSources(
+        contentSources,
+        start,
+    ));
 
     const token: Token = {
         kind: 'list_item',
-        start,
-        end: Math.max(start, end),
+        start: start - context.outputOffset,
+        end: Math.max(start, end) - context.outputOffset,
         children,
     };
     if (isLooseListItem(hasBlankInContent, hasDirectBlankBeforeNestedList, children)) token.attrs = { loose: true };
@@ -436,6 +368,18 @@ function countLeadingColumns(line: string): number {
         else break;
     }
     return column;
+}
+
+function characterIndexAfterColumns(line: string, columns: number): number {
+    let column = 0;
+    for (let index = 0; index < line.length; index++) {
+        const char = line.charCodeAt(index);
+        if (char !== 32 && char !== 9) return index;
+        const nextColumn = char === 9 ? nextTabStop(column) : column + 1;
+        if (nextColumn >= columns) return index + 1;
+        column = nextColumn;
+    }
+    return line.length;
 }
 
 function stripColumns(line: string, columns: number): string {

@@ -104,7 +104,7 @@ function generateGfmMarkdownDoc(wordCount: number): string {
             result += '| feature | status | link |\n';
             result += '| :-- | :-: | --: |\n';
             result += `| tables | ~ready~ | www.example${para}.com |\n`;
-            result += `| tasks | **done** | https://github.com/saturn9studio/editor/${para} |\n\n`;
+            result += `| tasks | **done** | https://github.com/example/project/${para} |\n\n`;
             wc += 16;
         } else if (para % 5 === 0) {
             result += '- [ ] write tests\n- [x] parse GFM\n- [ ] benchmark autolinks\n\n';

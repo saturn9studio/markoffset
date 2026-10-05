@@ -3,8 +3,10 @@ import { decodeEntities } from './entities.js';
 import { InlineContext } from './inline-context.js';
 import {
     BlockRule,
+    MappedSource,
     DelimiterRule,
     InlineRule,
+    ParsedBlock,
     Parser,
     ParserConfig,
     ParserExtensionState,
@@ -12,6 +14,11 @@ import {
     isDelimiterRule,
     BlockContext,
 } from './types.js';
+import {
+    concatenateSources,
+    contiguousSource,
+    mapTokensToSourceInPlace,
+} from './mapped-source.js';
 import { runDelimiterStack, RawItem } from './delimiter-stack.js';
 
 export function createParser(config: ParserConfig): Parser {
@@ -63,8 +70,8 @@ export function createParser(config: ParserConfig): Parser {
         end: number,
         extensions: ReadonlyMap<string, unknown>
     ): Token[] {
-        const parseInline = (content: string): Token[] =>
-            parseInlineContent(content, 0, content.length, extensions);
+        const parseInline = (from: number, to: number): Token[] =>
+            parseInlineContent(src, from, to, extensions);
         const ctx = new InlineContext(src, start, end, extensions, parseInline);
         const rawItems: RawItem[] = [];
         const inactiveRules = collectInactiveRules(src, start, end);
@@ -231,12 +238,25 @@ export function createParser(config: ParserConfig): Parser {
     function parseBlocks(
         scanner: BlockScanner,
         definitionLineStarts: ReadonlySet<number>,
-        extensions: ReadonlyMap<string, unknown>
+        extensions: ReadonlyMap<string, unknown>,
+        fixedOutputOrigin?: number,
     ): Token[] {
         const tokens: Token[] = [];
+        let outputOrigin = fixedOutputOrigin ?? 0;
         const blockContext: BlockContext = {
-            parseInline: (content: string) => parseInlineContent(content, 0, content.length, extensions),
-            parseBlocks: (content: string) => parseNestedBlocks(content, extensions),
+            get outputOffset() {
+                return outputOrigin;
+            },
+            parseInline: (source: MappedSource) => mapTokensToSourceInPlace(
+                parseInlineContent(source.text, 0, source.text.length, extensions),
+                source,
+                outputOrigin,
+            ),
+            parseBlocks: (source: MappedSource) => mapTokensToSourceInPlace(
+                parseNestedBlocks(source.text, extensions),
+                source,
+                outputOrigin,
+            ),
         };
 
         while (!scanner.atEnd()) {
@@ -251,6 +271,7 @@ export function createParser(config: ParserConfig): Parser {
                 scanner.advance();
                 continue;
             }
+            outputOrigin = fixedOutputOrigin ?? scanner.currentLineStart();
 
             // Try each block rule
             let matched = false;
@@ -260,9 +281,6 @@ export function createParser(config: ParserConfig): Parser {
             for (const rule of candidateBlockRules) {
                 if (rule.match(line, scanner)) {
                     const token = rule.parse(scanner, blockContext);
-                    if (rule.inlineContent && token.content !== undefined && !token.children) {
-                        token.children = parseInlineContent(token.content, 0, token.content.length, extensions);
-                    }
                     tokens.push(token);
                     matched = true;
                     break;
@@ -273,6 +291,8 @@ export function createParser(config: ParserConfig): Parser {
                 // Paragraph fallback: accumulate lines until blank line or block rule match
                 const start = scanner.currentLineStart();
                 const lines: string[] = [];
+                const lineSourceStarts: number[] = [];
+                const lineSourceEnds: number[] = [];
                 let setextLevel: number | undefined;
                 let setextEnd = start;
                 while (!scanner.atEnd()) {
@@ -298,7 +318,13 @@ export function createParser(config: ParserConfig): Parser {
                     if (blockedByRule) break;
                     // Keep trailing spaces (they're significant for hardbreaks)
                     // but we'll trim the very last line after collecting all lines
-                    lines.push(normalizeParagraphLine(l));
+                    const normalizedLine = normalizeParagraphLine(l);
+                    const leadingLength = l.length - l.trimStart().length;
+                    lines.push(normalizedLine);
+                    lineSourceStarts.push(
+                        scanner.currentLineStart() + leadingLength,
+                    );
+                    lineSourceEnds.push(scanner.currentLineEnd());
                     scanner.advance();
 
                 }
@@ -317,7 +343,36 @@ export function createParser(config: ParserConfig): Parser {
                     content,
                 };
                 if (setextLevel !== undefined) token.level = setextLevel;
-                token.children = parseInlineContent(content, 0, content.length, extensions);
+                if (lines.length === 1) {
+                    token.children = fixedOutputOrigin === undefined
+                        ? parseInlineContent(
+                            content,
+                            0,
+                            content.length,
+                            extensions,
+                        )
+                        : parseInlineContent(
+                            scanner.src,
+                            lineSourceStarts[0],
+                            lineSourceStarts[0] + content.length,
+                            extensions,
+                        );
+                } else {
+                    const lineSources = lines.flatMap((line, index) => {
+                        const source = contiguousSource(
+                            line,
+                            lineSourceStarts[index],
+                        );
+                        return index + 1 < lines.length
+                            ? [
+                                source,
+                                contiguousSource('\n', lineSourceEnds[index]),
+                            ]
+                            : [source];
+                    });
+                    const contentSource = concatenateSources(lineSources, start);
+                    token.children = blockContext.parseInline(contentSource);
+                }
                 tokens.push(token);
             }
         }
@@ -326,7 +381,7 @@ export function createParser(config: ParserConfig): Parser {
     }
 
     return {
-        parse(src: string): Token[] {
+        parse(src: string): ParsedBlock[] {
             // Normalize line endings only when carriage returns are present,
             // so the common case (no \r) avoids two full-string regex passes.
             const normalized = normalizeLineEndings(src);
@@ -336,23 +391,29 @@ export function createParser(config: ParserConfig): Parser {
                 const nestedExtensionStates = prepareExtensions(content, true);
                 const nestedDefinitionLineStarts = new Set<number>();
                 const nestedInlineContext = collectExtensionContext(nestedExtensionStates, nestedDefinitionLineStarts);
-                return parseBlocks(new BlockScanner(content), nestedDefinitionLineStarts, nestedInlineContext);
+                return parseBlocks(
+                    new BlockScanner(content),
+                    nestedDefinitionLineStarts,
+                    nestedInlineContext,
+                    0,
+                );
             };
-            return extensionStates.reduce(
+            const finalized = extensionStates.reduce(
                 (current, state) => state.finalize?.(current, parseBlocksForExtension) ?? current,
                 tokens
             );
+            return parsedBlocksFromTokens(finalized, 0);
         },
-        parseRange(src: string, from: number, to: number): Token[] {
+        parseRange(src: string, from: number, to: number): ParsedBlock[] {
             const normalized = normalizeLineEndings(src);
             const safeFrom = Math.max(0, Math.min(from, normalized.length));
             const safeTo = Math.max(safeFrom, Math.min(to, normalized.length));
-            return parseRangeBlocks(
+            return parsedBlocksFromTokens(parseRangeBlocks(
                 normalized,
                 safeFrom,
                 safeTo,
                 prepareExtensions(normalized, false)
-            );
+            ), safeFrom);
         },
         incrementalMetadata(src: string) {
             const normalized = normalizeLineEndings(src);
@@ -385,8 +446,11 @@ export function createParser(config: ParserConfig): Parser {
                 .filter((lineStart) => lineStart >= from && lineStart < to)
                 .map((lineStart) => lineStart - from)
         );
+        const rangeSource = from === 0 && to === src.length
+            ? src
+            : src.slice(from, to);
         return parseBlocks(
-            new BlockScanner(src.slice(from, to)),
+            new BlockScanner(rangeSource),
             rangeDefinitionLineStarts,
             inlineContext
         );
@@ -396,7 +460,33 @@ export function createParser(config: ParserConfig): Parser {
         const extensionStates = prepareExtensions(content, true);
         const definitionLineStarts = new Set<number>();
         const inlineContext = collectExtensionContext(extensionStates, definitionLineStarts, parentContext);
-        return parseBlocks(new BlockScanner(content), definitionLineStarts, inlineContext);
+        return parseBlocks(
+            new BlockScanner(content),
+            definitionLineStarts,
+            inlineContext,
+            0,
+        );
+    }
+
+    function parsedBlocksFromTokens(
+        tokens: readonly Token[],
+        sourceOffset: number,
+    ): ParsedBlock[] {
+        return tokens.map(token => {
+            const blockStart = token.start;
+            return {
+                start: sourceOffset + blockStart,
+                end: sourceOffset + token.end,
+                generated: token.generated === true,
+                token: localizeBlockRoot(token, blockStart),
+            };
+        });
+    }
+
+    function localizeBlockRoot(token: Token, blockStart: number): Token {
+        token.start = 0;
+        token.end -= blockStart;
+        return token;
     }
 
     function prepareExtensions(src: string, nested: boolean): ParserExtensionState[] {

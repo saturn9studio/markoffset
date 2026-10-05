@@ -1,4 +1,4 @@
-import type { Token } from '../../src/core/types.js';
+import type { ParsedBlock, Token } from '../../src/core/types.js';
 
 function escapeHtml(str: string): string {
     return str
@@ -243,6 +243,6 @@ function renderToken(token: Token, tight = false): string {
     }
 }
 
-export function renderToHtml(tokens: Token[]): string {
-    return renderTokens(tokens);
+export function renderToHtml(blocks: ParsedBlock[]): string {
+    return renderTokens(blocks.map(block => block.token));
 }

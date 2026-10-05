@@ -48,7 +48,7 @@ function parseInlineImage(ctx: InlineContext, start: number, textEnd: number, al
     if (p >= ctx.end || ctx.src.charCodeAt(p) !== 41) return null;
 
     ctx.pos = p + 1;
-    return createImageToken(ctx, start, ctx.pos, altText, url, title);
+    return createImageToken(ctx, start, ctx.pos, start + 2, textEnd, altText, url, title);
 }
 
 function parseReferenceImage(ctx: InlineContext, start: number, textEnd: number, altText: string): Token | null {
@@ -58,11 +58,36 @@ function parseReferenceImage(ctx: InlineContext, start: number, textEnd: number,
     if (!reference) return null;
 
     ctx.pos = parsedLabel?.newPos ?? textEnd + 1;
-    return createImageToken(ctx, start, ctx.pos, altText, reference.url, reference.title);
+    return createImageToken(
+        ctx,
+        start,
+        ctx.pos,
+        start + 2,
+        textEnd,
+        altText,
+        reference.url,
+        reference.title,
+    );
 }
 
-function createImageToken(ctx: InlineContext, start: number, end: number, content: string, url: string, title: string | undefined): Token {
-    const tok: Token = { kind: 'image', start, end, url, content, children: ctx.parseInline(content) };
+function createImageToken(
+    ctx: InlineContext,
+    start: number,
+    end: number,
+    contentStart: number,
+    contentEnd: number,
+    content: string,
+    url: string,
+    title: string | undefined,
+): Token {
+    const tok: Token = {
+        kind: 'image',
+        start,
+        end,
+        url,
+        content,
+        children: ctx.parseInline(contentStart, contentEnd),
+    };
     if (title !== undefined) tok.title = title;
     return tok;
 }

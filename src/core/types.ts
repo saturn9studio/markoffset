@@ -1,7 +1,8 @@
 export interface Token {
     kind: string;
-    start: number;     // offset in source (inclusive)
-    end: number;       // offset in source (exclusive)
+    start: number;     // offset in the containing parsed block (inclusive)
+    end: number;       // offset in the containing parsed block (exclusive)
+    generated?: boolean;
     // optional fields used by specific kinds
     level?: number;
     markup?: string;
@@ -16,23 +17,57 @@ export interface Token {
     children?: Token[];
 }
 
+export interface ParsedBlock {
+    start: number;     // offset in normalized source (inclusive)
+    end: number;       // offset in normalized source (exclusive)
+    generated: boolean;
+    token: Token;
+}
+
+export interface TokenView {
+    token: Token;
+    start: number;
+    end: number;
+    generated: boolean;
+    children: TokenView[];
+}
+
 export type TokenAttrValue = string | number | boolean;
 export type TokenAttrs = Record<string, TokenAttrValue>;
+
+export interface SourceSegment {
+    readonly localFrom: number;
+    readonly localTo: number;
+    readonly sourceFrom: number;
+    readonly sourceTo: number;
+}
+
+export interface MappedSource {
+    readonly text: string;
+    readonly segments: readonly SourceSegment[];
+    readonly emptySourceOffset: number;
+}
+
+export interface MappedSourcePart {
+    readonly text: string;
+    readonly sourceFrom: number;
+    readonly sourceTo: number;
+}
 
 export interface BlockRule {
     name: string;
     priority: number;
     startChars?: string;
     requiredChars?: string;
-    inlineContent?: boolean;
     match(line: string, scanner: BlockScanner): boolean;
     canInterruptParagraph?(line: string, scanner: BlockScanner): boolean;
     parse(scanner: BlockScanner, context: BlockContext): Token;
 }
 
 export interface BlockContext {
-    parseInline(src: string): Token[];
-    parseBlocks(src: string): Token[];
+    readonly outputOffset: number;
+    parseInline(source: MappedSource): Token[];
+    parseBlocks(source: MappedSource): Token[];
 }
 
 export interface DelimiterRule {
@@ -85,15 +120,15 @@ export interface InlineContext {
     pos: number;
     end: number;
     extensions: ReadonlyMap<string, unknown>;
-    parseInline(src: string): Token[];
+    parseInline(from: number, to: number): Token[];
     atEnd(): boolean;
     peek(): number;
     advance(n?: number): void;
 }
 
 export interface Parser {
-    parse(src: string): Token[];
-    parseRange(src: string, from: number, to: number): Token[];
+    parse(src: string): ParsedBlock[];
+    parseRange(src: string, from: number, to: number): ParsedBlock[];
     incrementalMetadata(src: string): ParserIncrementalMetadata;
     extend(config: ParserConfig): Parser;
 }

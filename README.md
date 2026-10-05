@@ -2,16 +2,16 @@
 
 Fast, plugin-based Markdown parsing with source offsets.
 
-Markoffset parses Markdown into a token tree where every token carries source
-character offsets. It is designed for editor, analysis, linting, preview, and
+Markoffset parses Markdown into immutable block-local token trees with exact
+source ranges. It is designed for editor, analysis, linting, preview, and
 transformation workflows that need structured Markdown without losing the
 connection back to the original source text.
 
 ## Goals
 
 - **Fast parsing** for interactive use, including editor feedback loops.
-- **Source fidelity**: tokens include `start` and `end` offsets into the
-  normalized source string.
+- **Source fidelity**: parsed blocks carry normalized document offsets, and
+  every nested token carries an exact range relative to its block.
 - **CommonMark and GFM coverage** through ready-to-use presets.
 - **Incremental reparsing** for applying text edits without always reparsing the
   whole document.
@@ -30,31 +30,67 @@ bundlers.
 ## Quick start
 
 ```ts
-import { gfmParser } from '@saturn9/markoffset';
+import { gfmParser, tokenViews } from '@saturn9/markoffset';
 
-const tokens = gfmParser.parse(`# Hello
+const blocks = gfmParser.parse(`# Hello
 
 - [x] parse Markdown
 - [ ] keep source offsets
 `);
 
-console.log(tokens[0]);
+console.log(blocks[0].token);
+console.log(tokenViews(blocks)[0]);
 ```
 
-Tokens are plain objects:
+Each parsed block owns an absolute range in the normalized source and an
+immutable token tree:
 
 ```ts
+interface ParsedBlock {
+    start: number;
+    end: number;
+    generated: boolean;
+    token: Token;
+}
+
 interface Token {
     kind: string;
     start: number;
     end: number;
+    generated?: boolean;
     content?: string;
     children?: Token[];
 }
 ```
 
-`start` is inclusive and `end` is exclusive. Offsets are measured against the
-source string after line endings have been normalized to `\n`.
+All ranges are half-open: `start` is inclusive and `end` is exclusive.
+`ParsedBlock` offsets are measured against the source after line endings have
+been normalized to `\n`. Token offsets are relative to the containing block, so
+incremental reparsing can move an unchanged block without rebuilding its token
+tree.
+
+Source-backed blocks and token views have `generated: false`, and their ranges
+resolve exactly into the normalized source. Extensions may emit generated
+output that has no contiguous source span. Those blocks and all descendant
+token views have `generated: true`; their ranges are stable anchors and must
+not be used to slice source text. The GFM footnote list is generated output,
+while each in-text `footnote_ref` remains source-backed.
+
+Use `tokenViews()` or `resolveToken()` when document-absolute token ranges are
+needed:
+
+```ts
+import { resolveToken } from '@saturn9/markoffset';
+
+const first = blocks[0];
+const view = resolveToken(first);
+
+console.log(source.slice(view.start, view.end));
+```
+
+Delimiter containers cover their complete source syntax. For `***text***`, the
+outer emphasis range covers all three opening and closing markers, the nested
+strong range covers `**text**`, and the text child covers `text`.
 
 ## Presets
 
@@ -66,8 +102,8 @@ import { commonmarkParser, gfmParser } from '@saturn9/markoffset';
 // import { commonmarkParser } from '@saturn9/markoffset/presets/commonmark';
 // import { gfmParser } from '@saturn9/markoffset/presets/gfm';
 
-const commonmarkTokens = commonmarkParser.parse(markdown);
-const gfmTokens = gfmParser.parse(markdown);
+const commonmarkBlocks = commonmarkParser.parse(markdown);
+const gfmBlocks = gfmParser.parse(markdown);
 ```
 
 The GFM preset layers extensions such as tables, task list items,
@@ -90,13 +126,15 @@ state = reparse(gfmParser, state, {
     insert: 'updated text',
 });
 
-console.log(state.tokens);
+console.log(state.blocks);
 ```
 
 A change replaces the half-open range `[from, to)` in the previous source with
-`insert`. Incremental parsing reuses unchanged block tokens where it can, and
-falls back to a full parse when document-wide syntax state changes, such as link
-reference or footnote state that can affect earlier tokens.
+`insert`. Incremental parsing reparses a bounded block region and reuses
+unchanged token trees before and after it. Moving an unchanged tail requires
+updating only its block ranges; nested token trees remain immutable. Markoffset
+falls back to a full parse only when document-wide syntax state changes, such as
+link reference or footnote state that can affect earlier tokens.
 
 ## Custom parsers and plugins
 
@@ -147,6 +185,26 @@ export const parser = createParser({
 });
 ```
 
+Block rules that parse transformed or extracted content pass a `MappedSource`
+to `BlockContext.parseInline()` or `BlockContext.parseBlocks()`. The core
+exports helpers for contiguous, concatenated, and transformed source:
+
+```ts
+import { contiguousSource } from '@saturn9/markoffset/core';
+
+const children = context.parseInline(
+    contiguousSource(content, contentStart),
+);
+```
+
+This keeps inline ranges connected to the original block source even when a
+block rule removes markers, indentation, or prefixes before nested parsing.
+The returned descendants are already relative to the containing parsed block.
+If a rule creates additional structural child tokens directly from scanner
+offsets, subtract `context.outputOffset` from those child ranges. The rule's
+top-level token continues to use scanner offsets; Markoffset localizes that
+root when it creates the `ParsedBlock`.
+
 Public subpaths include:
 
 - `@saturn9/markoffset/core`
@@ -166,6 +224,11 @@ Markoffset uses a line-oriented block parser and a Pratt-style inline parser.
 The block pass dispatches to ordered block rules, with a paragraph fallback. The
 inline pass dispatches by trigger character and uses delimiter rules for nested
 inline markup such as emphasis and strikethrough.
+
+Nested block parsing carries compact source mappings for transformed content.
+The mappings are resolved into one block-local coordinate space before a parsed
+block is exposed. This keeps range lookup exact while allowing incremental
+reparsing to reuse unchanged token trees without recursively shifting them.
 
 Document-wide syntax, such as link reference definitions and footnote
 definitions, is implemented with parser extensions. Extensions can prepare

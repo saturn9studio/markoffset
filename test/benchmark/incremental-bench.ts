@@ -20,9 +20,9 @@ const baseState = parseDocument(parser, doc);
 
 // Sanity check: confirm the invariant holds for this benchmark scenario before
 // reporting numbers, so we never advertise a speed-up for incorrect output.
-const incrementalTokens = reparse(parser, baseState, change).tokens;
-const fullTokens = parser.parse(newSrc);
-if (JSON.stringify(incrementalTokens) !== JSON.stringify(fullTokens)) {
+const incrementalBlocks = reparse(parser, baseState, change).blocks;
+const fullBlocks = parser.parse(newSrc);
+if (JSON.stringify(incrementalBlocks) !== JSON.stringify(fullBlocks)) {
     throw new Error('Benchmark invariant violation: incremental output != full output');
 }
 
@@ -37,7 +37,7 @@ bench
     });
 
 (async () => {
-    console.log(`Document size: ${doc.length.toLocaleString()} chars, ${baseState.tokens.length} top-level blocks`);
+    console.log(`Document size: ${doc.length.toLocaleString()} chars, ${baseState.blocks.length} top-level blocks`);
     await bench.run();
     console.table(
         bench.tasks.map((t) => ({

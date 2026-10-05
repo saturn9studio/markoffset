@@ -1,4 +1,4 @@
-import { Parser, Token } from './core/types.js';
+import { ParsedBlock, Parser, Token } from './core/types.js';
 
 /**
  * A text edit: replace the half-open range [from, to) of the OLD source with
@@ -12,12 +12,12 @@ export interface Change {
 
 /**
  * Reusable parse state. `src` is the normalized source (line endings collapsed
- * to `\n`, exactly as the underlying parser sees it) and `tokens` are the
- * top-level block tokens for that source.
+ * to `\n`, exactly as the underlying parser sees it) and `blocks` are the
+ * top-level parsed blocks for that source.
  */
 export interface ParseState {
     src: string;
-    tokens: Token[];
+    blocks: ParsedBlock[];
     documentStateFingerprint: string;
     requiresFullIncrementalReparse: boolean;
 }
@@ -38,57 +38,17 @@ export function parseDocument(parser: Parser, src: string): ParseState {
     const metadata = parser.incrementalMetadata(normalized);
     return {
         src: normalized,
-        tokens: parser.parse(normalized),
+        blocks: parser.parse(normalized),
         ...metadata,
     };
 }
 
-/**
- * All block-level tokens — including `list_item` children of bullet/ordered
- * lists, and the block children of `list_item` itself — use document-absolute
- * offsets. Inline children (paragraph/heading/fence) and blockquote children
- * remain content-relative and are never shifted.
- */
-function shiftChildren(parentKind: string, children: Token[], delta: number): Token[] {
-    if (parentKind === 'bullet_list' || parentKind === 'ordered_list') {
-        // children are list_item tokens — document-absolute, recurse.
-        return children.map(item => shiftToken(item, delta));
-    }
-    if (parentKind === 'list_item') {
-        // children are block tokens — document-absolute, recurse.
-        return children.map(child => shiftToken(child, delta));
-    }
-    if (
-        parentKind === 'table' ||
-        parentKind === 'table_head' ||
-        parentKind === 'table_body' ||
-        parentKind === 'table_header' ||
-        parentKind === 'table_row'
-    ) {
-        // Table sections, rows, and cells all carry document-absolute ranges.
-        return children.map(child => shiftToken(child, delta));
-    }
-    if (parentKind === 'blockquote') {
-        // blockquote children come from parseBlocks(innerSrc) — content-relative, never shift.
-        return children;
-    }
-    // paragraph/heading/fence: inline children — content-relative, never shift.
-    return children;
-}
-
-/**
- * Shift a block token's document-absolute `start`/`end` offsets by `delta`,
- * returning a fresh token. Recurses into block-level children (lists and
- * list_item block children), which are also document-absolute. Inline children
- * and blockquote children are content-relative and left untouched.
- */
-function shiftToken(token: Token, delta: number): Token {
-    if (delta === 0) return token;
+function shiftBlock(block: ParsedBlock, delta: number): ParsedBlock {
+    if (delta === 0) return block;
     return {
-        ...token,
-        start: token.start + delta,
-        end:   token.end + delta,
-        children: token.children ? shiftChildren(token.kind, token.children, delta) : undefined,
+        ...block,
+        start: block.start + delta,
+        end: block.end + delta,
     };
 }
 
@@ -152,7 +112,7 @@ export function reparse(parser: Parser, prev: ParseState, change: Change): Parse
     const insertNorm = normalize(insert);
     const newSrc = oldSrc.slice(0, from) + insertNorm + oldSrc.slice(to);
     const delta = insertNorm.length - (to - from);
-    const oldTokens = prev.tokens;
+    const oldBlocks = prev.blocks;
     const metadata = parser.incrementalMetadata(newSrc);
 
     if (
@@ -162,7 +122,7 @@ export function reparse(parser: Parser, prev: ParseState, change: Change): Parse
     ) {
         return {
             src: newSrc,
-            tokens: parser.parse(newSrc),
+            blocks: parser.parse(newSrc),
             ...metadata,
         };
     }
@@ -174,22 +134,22 @@ export function reparse(parser: Parser, prev: ParseState, change: Change): Parse
     // therefore back up one block past the last block that ends before `from`,
     // re-parsing it as part of the region. This keeps reuse correct at boundaries.
     let lastBefore = 0;
-    while (lastBefore < oldTokens.length && oldTokens[lastBefore].end < from) lastBefore++;
+    while (lastBefore < oldBlocks.length && oldBlocks[lastBefore].end < from) lastBefore++;
     const headEnd = Math.max(0, lastBefore - 1);
 
     // Region to re-parse begins at the start of the first non-head block (a
     // top-level line boundary), or document start if there is no head. This
     // offset is identical in old and new source because everything before it is
     // unchanged (the head blocks end before `from`).
-    const regionStart = headEnd > 0 ? oldTokens[headEnd].start : 0;
+    const regionStart = headEnd > 0 ? oldBlocks[headEnd].start : 0;
 
-    const head = oldTokens.slice(0, headEnd);
+    const head = oldBlocks.slice(0, headEnd);
 
     // Candidate resync anchors: old blocks that start at/after `to` (their text
     // is unchanged by the edit). Each anchor's old start, shifted by `delta`,
     // is a position in the new source where the unchanged tail could resume.
     let firstTail = headEnd;
-    while (firstTail < oldTokens.length && oldTokens[firstTail].start < to) firstTail++;
+    while (firstTail < oldBlocks.length && oldBlocks[firstTail].start < to) firstTail++;
 
     // Try each candidate anchor in order. For anchor `j` we re-parse the BOUNDED
     // region [regionStart, verifyEnd) that INCLUDES the anchor block itself
@@ -201,34 +161,33 @@ export function reparse(parser: Parser, prev: ParseState, change: Change): Parse
     // failing the check and causing us to widen). On success the old tail from `j`
     // onward is provably identical to a full re-parse by line-locality, so we
     // reuse it shifted and stop — having parsed only a bounded span past the edit.
-    for (let j = firstTail; j < oldTokens.length; j++) {
-        const anchorNewStart = oldTokens[j].start + delta;
+    for (let j = firstTail; j < oldBlocks.length; j++) {
+        const anchorNewStart = oldBlocks[j].start + delta;
         if (anchorNewStart < regionStart || anchorNewStart > newSrc.length) continue;
-        const verifyEnd = (j + 1 < oldTokens.length ? oldTokens[j + 1].start : oldSrc.length) + delta;
+        const verifyEnd = (j + 1 < oldBlocks.length ? oldBlocks[j + 1].start : oldSrc.length) + delta;
         if (verifyEnd > newSrc.length) continue;
 
-        const regionTokens = parser.parseRange(newSrc, regionStart, verifyEnd)
-            .map((t) => shiftToken(t, regionStart));
+        const regionBlocks = parser.parseRange(newSrc, regionStart, verifyEnd);
 
-        const anchorIdx = regionTokens.findIndex((t) => t.start === anchorNewStart);
+        const anchorIdx = regionBlocks.findIndex(block => block.start === anchorNewStart);
         if (anchorIdx === -1) continue;
-        if (!sameShape(regionTokens[anchorIdx], oldTokens[j])) continue;
+        if (!sameShape(regionBlocks[anchorIdx].token, oldBlocks[j].token)) continue;
 
-        const body = regionTokens.slice(0, anchorIdx);
-        const tail = oldTokens.slice(j).map((t) => shiftToken(t, delta));
+        const body = regionBlocks.slice(0, anchorIdx);
+        const tail = oldBlocks.slice(j).map(block => shiftBlock(block, delta));
         return {
             src: newSrc,
-            tokens: [...head, ...body, ...tail],
+            blocks: [...head, ...body, ...tail],
             ...metadata,
         };
     }
 
     // No clean resync (edit effects reach EOF, or no reusable tail). Re-parse the
     // whole tail from regionStart. Still skips the untouched head; always correct.
-    const fresh = parser.parseRange(newSrc, regionStart, newSrc.length).map((t) => shiftToken(t, regionStart));
+    const fresh = parser.parseRange(newSrc, regionStart, newSrc.length);
     return {
         src: newSrc,
-        tokens: [...head, ...fresh],
+        blocks: [...head, ...fresh],
         ...metadata,
     };
 }
