@@ -318,8 +318,11 @@ export function createParser(config: ParserConfig): Parser {
                     if (blockedByRule) break;
                     // Keep trailing spaces (they're significant for hardbreaks)
                     // but we'll trim the very last line after collecting all lines
-                    const normalizedLine = normalizeParagraphLine(l);
-                    const leadingLength = l.length - l.trimStart().length;
+                    const leadingLength = paragraphLeadingWhitespaceLength(
+                        l,
+                        lines.length === 0,
+                    );
+                    const normalizedLine = l.slice(leadingLength);
                     lines.push(normalizedLine);
                     lineSourceStarts.push(
                         scanner.currentLineStart() + leadingLength,
@@ -634,8 +637,18 @@ function getSetextHeadingLevel(line: string): number | undefined {
     return marker === 61 ? 1 : 2;
 }
 
-function normalizeParagraphLine(line: string): string {
-    return line.trimStart();
+function paragraphLeadingWhitespaceLength(
+    line: string,
+    firstLine: boolean,
+): number {
+    if (firstLine) return line.length - line.trimStart().length;
+    let length = 0;
+    while (length < line.length) {
+        const char = line.charCodeAt(length);
+        if (char !== 32 && char !== 9) break;
+        length++;
+    }
+    return length;
 }
 
 function countLeadingSpaces(line: string): number {
