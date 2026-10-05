@@ -1,4 +1,9 @@
 import { BlockContext, BlockRule, Token, BlockScanner as IBlockScanner } from '../../core/types.js';
+import {
+    concatenateSources,
+    contiguousSource,
+    transformedSource,
+} from '../../core/mapped-source.js';
 
 /**
  * Create a blockquote rule that recursively parses its content using the given block parser.
@@ -16,6 +21,10 @@ export function createBlockquoteRule(): BlockRule {
         parse(scanner: IBlockScanner, context: BlockContext): Token {
             const start = scanner.currentLineStart();
             const lines: string[] = [];
+            const lineSources: Array<{
+                source: ReturnType<typeof transformedSource>;
+                lineEnd: number;
+            }> = [];
             let canLazyContinueParagraph = false;
             let hasLazyContinuation = false;
 
@@ -28,11 +37,22 @@ export function createBlockquoteRule(): BlockRule {
 
                 if (line.charCodeAt(i) === 62) {
                     // blockquote line: strip > prefix
-                    let content = line.slice(i + 1);
+                    let original = line.slice(i + 1);
+                    let sourceStart = scanner.currentLineStart() + i + 1;
+                    let content = original;
                     // Optionally strip one space after >
-                    if (content.charCodeAt(0) === 32) content = content.slice(1);
-                    else if (content.charCodeAt(0) === 9) content = expandLeadingTabsAfterMarker(content);
+                    if (content.charCodeAt(0) === 32) {
+                        content = content.slice(1);
+                        original = original.slice(1);
+                        sourceStart++;
+                    } else if (content.charCodeAt(0) === 9) {
+                        content = expandLeadingTabsAfterMarker(content);
+                    }
                     lines.push(content);
+                    lineSources.push({
+                        source: transformedSource(content, original, sourceStart),
+                        lineEnd: scanner.currentLineEnd(),
+                    });
                     canLazyContinueParagraph = canStartLazyParagraph(content);
                     hasLazyContinuation = false;
                     scanner.advance();
@@ -41,7 +61,18 @@ export function createBlockquoteRule(): BlockRule {
                     // Per spec, a blank line interrupts a blockquote
                     break;
                 } else if (canLazyContinueParagraph && (hasLazyContinuation || !isLazyBreakingLine(line))) {
-                    lines.push(hasLazyContinuation && isSetextUnderline(line) ? `\\${line}` : line);
+                    const content = hasLazyContinuation && isSetextUnderline(line)
+                        ? `\\${line}`
+                        : line;
+                    lines.push(content);
+                    lineSources.push({
+                        source: transformedSource(
+                            content,
+                            line,
+                            scanner.currentLineStart(),
+                        ),
+                        lineEnd: scanner.currentLineEnd(),
+                    });
                     hasLazyContinuation = true;
                     scanner.advance();
                 } else {
@@ -50,8 +81,18 @@ export function createBlockquoteRule(): BlockRule {
             }
 
             const end = scanner.currentLineStart() > 0 ? scanner.currentLineStart() - 1 : start;
-            const innerSrc = lines.join('\n');
-            const children = context.parseBlocks(innerSrc);
+            const sourceParts = lineSources.flatMap((entry, index) =>
+                index + 1 < lineSources.length
+                    ? [
+                        entry.source,
+                        contiguousSource('\n', entry.lineEnd),
+                    ]
+                    : [entry.source]
+            );
+            const children = context.parseBlocks(concatenateSources(
+                sourceParts,
+                start,
+            ));
 
             return {
                 kind: 'blockquote',

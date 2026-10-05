@@ -1,4 +1,5 @@
 import { BlockContext, BlockRule, Token } from '../../core/types.js';
+import { contiguousSource } from '../../core/mapped-source.js';
 import { createListRule } from './list.js';
 
 export function createTaskListRule(): BlockRule {
@@ -44,7 +45,10 @@ function markTaskItem(item: Token, context: BlockContext): void {
     item.attrs = { ...item.attrs, checked: match.checked };
     paragraph.start += match.markerLength;
     paragraph.content = content;
-    paragraph.children = context.parseInline(content);
+    paragraph.children = context.parseInline(contiguousSource(
+        content,
+        paragraph.start,
+    ));
     item.children?.forEach(child => {
         if (child !== paragraph) markTaskItems(child, context);
     });

@@ -111,6 +111,7 @@ function createFootnotesToken(
         kind: 'footnotes',
         start: 0,
         end: 0,
+        generated: true,
         children: items,
     };
 }

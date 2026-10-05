@@ -50,7 +50,7 @@ function parseInlineLink(ctx: InlineContext, start: number, textEnd: number, tex
     if (p >= ctx.end || ctx.src.charCodeAt(p) !== 41) return null;
 
     ctx.pos = p + 1;
-    return createLinkToken(ctx, start, ctx.pos, textContent, url, title);
+    return createLinkToken(ctx, start, ctx.pos, start + 1, textEnd, textContent, url, title);
 }
 
 function parseReferenceLink(ctx: InlineContext, start: number, textEnd: number, textContent: string): Token | null {
@@ -61,7 +61,16 @@ function parseReferenceLink(ctx: InlineContext, start: number, textEnd: number, 
     if (!reference) return null;
 
     ctx.pos = parsedLabel?.newPos ?? textEnd + 1;
-    return createLinkToken(ctx, start, ctx.pos, textContent, reference.url, reference.title);
+    return createLinkToken(
+        ctx,
+        start,
+        ctx.pos,
+        start + 1,
+        textEnd,
+        textContent,
+        reference.url,
+        reference.title,
+    );
 }
 
 function hasCompetingInline(text: string): boolean {
@@ -88,14 +97,23 @@ function hasUnclosedCodeSpan(text: string): boolean {
     return (text.match(/`+/gu) ?? []).length % 2 === 1;
 }
 
-function createLinkToken(ctx: InlineContext, start: number, end: number, content: string, url: string, title: string | undefined): Token {
+function createLinkToken(
+    ctx: InlineContext,
+    start: number,
+    end: number,
+    contentStart: number,
+    contentEnd: number,
+    content: string,
+    url: string,
+    title: string | undefined,
+): Token {
     const tok: Token = {
         kind: 'link',
         start,
         end,
         url,
         content,
-        children: ctx.parseInline(content),
+        children: ctx.parseInline(contentStart, contentEnd),
     };
     if (title !== undefined) tok.title = title;
     return tok;

@@ -5,14 +5,14 @@ export class InlineContext implements IInlineContext {
     pos: number;
     end: number;
     extensions: ReadonlyMap<string, unknown>;
-    parseInline: (src: string) => Token[];
+    parseInline: (from: number, to: number) => Token[];
 
     constructor(
         src: string,
         start: number,
         end: number,
         extensions: ReadonlyMap<string, unknown> = new Map(),
-        parseInline: (src: string) => Token[] = () => []
+        parseInline: (from: number, to: number) => Token[] = () => []
     ) {
         this.src = src;
         this.pos = start;

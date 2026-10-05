@@ -74,6 +74,8 @@ interface MatchedSpan {
     useCount: number;        // number of delimiters used
     kind: string;            // 'em' | 'strong' | 'strikethrough' | ...
     markup: string;
+    openerStart: number;
+    closerEnd: number;
 }
 
 /**
@@ -220,6 +222,8 @@ export function runDelimiterStack(
             useCount,
             kind,
             markup,
+            openerStart: opener.start + opener.count - useCount,
+            closerEnd: closer.start + (closer.origCount - closer.count) + useCount,
         });
 
         // Consume from opener and closer
@@ -392,8 +396,8 @@ export function runDelimiterStack(
 
                 const newToken: Token = {
                     kind: span.kind,
-                    start: run.start,  // approximate
-                    end: run.start + span.useCount,
+                    start: span.openerStart,
+                    end: span.closerEnd,
                     markup: span.markup,
                     children: openSpan.children,
                 };

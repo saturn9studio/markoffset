@@ -15,7 +15,7 @@ function applyChange(src: string, change: Change): string {
  */
 function expectInvariant(doc: string, change: Change, parserUnderTest: Parser = parser): void {
     const prev = parseDocument(parserUnderTest, doc);
-    const incremental = reparse(parserUnderTest, prev, change).tokens;
+    const incremental = reparse(parserUnderTest, prev, change).blocks;
     const full = parserUnderTest.parse(applyChange(prev.src, change));
     expect(incremental).toEqual(full);
 }
@@ -147,7 +147,7 @@ describe('incremental reparse — fundamental invariant', () => {
         // from/to are offsets into the NORMALIZED source.
         const from = prev.src.indexOf('two');
         const change: Change = { from, to: from, insert: 'X' };
-        const incremental = reparse(parser, prev, change).tokens;
+        const incremental = reparse(parser, prev, change).blocks;
         const full = parser.parse(applyChange(prev.src, change));
         expect(incremental).toEqual(full);
     });
@@ -223,13 +223,13 @@ describe('incremental reparse — randomized property test', () => {
             const doc = randomDoc(120);
             const prev = parseDocument(parser, doc);
             const change = randomChange(prev.src);
-            const incremental = reparse(parser, prev, change).tokens;
+            const incremental = reparse(parser, prev, change).blocks;
             const full = parser.parse(applyChange(prev.src, change));
             if (JSON.stringify(incremental) !== JSON.stringify(full)) {
                 throw new Error(
                     `Invariant violated\n doc=${JSON.stringify(doc)}\n change=${JSON.stringify(change)}\n`
-                    + ` incremental=${JSON.stringify(incremental.map((t: Token) => [t.kind, t.start, t.end]))}\n`
-                    + ` full=${JSON.stringify(full.map((t: Token) => [t.kind, t.start, t.end]))}`
+                    + ` incremental=${JSON.stringify(incremental.map(block => [block.token.kind, block.start, block.end]))}\n`
+                    + ` full=${JSON.stringify(full.map(block => [block.token.kind, block.start, block.end]))}`
                 );
             }
         }
@@ -259,7 +259,7 @@ describe('incremental reparse — randomized property test', () => {
             const from = randInt(prev.src.length + 1);
             const to = Math.min(prev.src.length, from + randInt(6));
             const change: Change = { from, to, insert: inserts[randInt(inserts.length)] };
-            const incremental = reparse(parser, prev, change).tokens;
+            const incremental = reparse(parser, prev, change).blocks;
             const full = parser.parse(applyChange(prev.src, change));
             expect(incremental).toEqual(full);
         }
@@ -276,6 +276,33 @@ describe('incremental reparse — locality (does not reparse the whole document)
         // but it should be value-equal to the old block shifted — and crucially,
         // matches a full parse.
         const full = parser.parse(applyChange(prev.src, { from, to: from, insert: 'X' }));
-        expect(next.tokens).toEqual(full);
+        expect(next.blocks).toEqual(full);
+        expect(next.blocks.at(-1)?.token).toBe(prev.blocks.at(-1)?.token);
+    });
+
+    test('preserves the invariant across edit sequences', () => {
+        let state = parseDocument(parser, [
+            '# Heading',
+            '',
+            'Paragraph with ***formatting***.',
+            '',
+            '- first',
+            '- second',
+            '',
+            '> quote',
+        ].join('\n'));
+
+        const changes: Change[] = [
+            { from: 2, to: 2, insert: 'X' },
+            { from: 20, to: 20, insert: '*' },
+            { from: 20, to: 21, insert: '' },
+            { from: state.src.indexOf('second'), to: state.src.indexOf('second') + 6, insert: 'updated' },
+            { from: state.src.length, to: state.src.length, insert: '\n\nTail' },
+        ];
+
+        for (const change of changes) {
+            state = reparse(parser, state, change);
+            expect(state.blocks).toEqual(parser.parse(state.src));
+        }
     });
 });

@@ -1,3 +1,4 @@
+import { mappedSource } from '../../core/mapped-source.js';
 import { BlockContext, BlockRule, BlockScanner, Token } from '../../core/types.js';
 
 type Alignment = 'left' | 'center' | 'right';
@@ -34,7 +35,14 @@ export function createTableRule(): BlockRule {
                 throw new Error('table parser invoked without a table header');
             }
 
-            const headerRow = createTableRow('table_header', 'table_header_cell', firstLine, header.cells, header.delimiters, context.parseInline);
+            const headerRow = createTableRow(
+                'table_header',
+                'table_header_cell',
+                firstLine,
+                header.cells,
+                header.delimiters,
+                context,
+            );
             scanner.advance();
             scanner.advance();
 
@@ -43,7 +51,14 @@ export function createTableRule(): BlockRule {
             while (!scanner.atEnd()) {
                 const line = currentSourceLine(scanner);
                 if (!isTableBodyLine(line.text)) break;
-                bodyRows.push(createTableRow('table_row', 'table_cell', line, normalizeBodyCells(line, header.cells.length), header.delimiters, context.parseInline));
+                bodyRows.push(createTableRow(
+                    'table_row',
+                    'table_cell',
+                    line,
+                    normalizeBodyCells(line, header.cells.length),
+                    header.delimiters,
+                    context,
+                ));
                 end = line.end;
                 scanner.advance();
             }
@@ -51,8 +66,8 @@ export function createTableRule(): BlockRule {
             const children: Token[] = [
                 {
                     kind: 'table_head',
-                    start: firstLine.start,
-                    end: firstLine.end,
+                    start: firstLine.start - context.outputOffset,
+                    end: firstLine.end - context.outputOffset,
                     children: [headerRow],
                 },
             ];
@@ -117,7 +132,7 @@ function createTableRow(
     line: SourceLine,
     cells: SourceCell[],
     delimiters: DelimiterCell[],
-    parseInline: (src: string) => Token[]
+    context: BlockContext,
 ): Token {
     const children: Token[] = [];
     for (let index = 0; index < cells.length; index++) {
@@ -126,18 +141,53 @@ function createTableRow(
         const align = delimiters[index]?.align;
         children.push({
             kind: cellKind,
-            start: cell.start,
-            end: cell.end,
+            start: cell.start - context.outputOffset,
+            end: cell.end - context.outputOffset,
             content,
             attrs: align === undefined ? undefined : { align },
-            children: parseInline(content),
+            children: context.parseInline(tableCellSource(cell)),
         });
+    }
+
+    function tableCellSource(cell: SourceCell) {
+        const parts = [];
+        let chunkStart = 0;
+        for (let index = 0; index < cell.text.length - 1; index++) {
+            if (
+                cell.text.charCodeAt(index) !== 92 ||
+                cell.text.charCodeAt(index + 1) !== 124
+            ) {
+                continue;
+            }
+            if (index > chunkStart) {
+                parts.push({
+                    text: cell.text.slice(chunkStart, index),
+                    sourceFrom: cell.start + chunkStart,
+                    sourceTo: cell.start + index,
+                });
+            }
+            parts.push({
+                text: '|',
+                sourceFrom: cell.start + index,
+                sourceTo: cell.start + index + 2,
+            });
+            index++;
+            chunkStart = index + 1;
+        }
+        if (chunkStart < cell.text.length) {
+            parts.push({
+                text: cell.text.slice(chunkStart),
+                sourceFrom: cell.start + chunkStart,
+                sourceTo: cell.end,
+            });
+        }
+        return mappedSource(parts, cell.start);
     }
 
     return {
         kind,
-        start: line.start,
-        end: line.end,
+        start: line.start - context.outputOffset,
+        end: line.end - context.outputOffset,
         children,
     };
 }

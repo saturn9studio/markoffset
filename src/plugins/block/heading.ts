@@ -1,10 +1,10 @@
+import { contiguousSource } from '../../core/mapped-source.js';
 import { BlockRule, Token } from '../../core/types.js';
 
 export const heading: BlockRule = {
     name: 'heading',
     priority: 90,
     startChars: '#',
-    inlineContent: true,
     match(line: string): boolean {
         // Allow 0-3 spaces of indent
         let i = 0;
@@ -19,7 +19,7 @@ export const heading: BlockRule = {
         const ch = line.charCodeAt(afterHash);
         return ch === 32 || ch === 9;
     },
-    parse(scanner): Token {
+    parse(scanner, context): Token {
         const line = scanner.currentLine();
         const start = scanner.currentLineStart();
 
@@ -70,6 +70,16 @@ export const heading: BlockRule = {
         const content = line.slice(contentStart, contentEnd);
         const end = scanner.currentLineEnd();
         scanner.advance();
-        return { kind: 'heading', start, end, level, content };
+        return {
+            kind: 'heading',
+            start,
+            end,
+            level,
+            content,
+            children: context.parseInline(contiguousSource(
+                content,
+                start + contentStart,
+            )),
+        };
     },
 };
