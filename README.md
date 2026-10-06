@@ -76,6 +76,10 @@ token views have `generated: true`; their ranges are stable anchors and must
 not be used to slice source text. The GFM footnote list is generated output,
 while each in-text `footnote_ref` remains source-backed.
 
+Consumers implementing parser-compatible block adapters can use
+`setextHeadingLevel(line)` to classify a CommonMark setext underline without
+duplicating the parser's heading rules.
+
 Use `tokenViews()` or `resolveToken()` when document-absolute token ranges are
 needed:
 

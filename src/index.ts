@@ -1,4 +1,4 @@
-export { createParser } from './core/parser.js';
+export { createParser, setextHeadingLevel } from './core/parser.js';
 export {
     concatenateSources,
     contiguousSource,

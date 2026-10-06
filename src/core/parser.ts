@@ -298,7 +298,7 @@ export function createParser(config: ParserConfig): Parser {
                 while (!scanner.atEnd()) {
                     const l = scanner.currentLine();
                     if (isBlankLine(l)) break;
-                    const underlineLevel = lines.length > 0 ? getSetextHeadingLevel(l) : undefined;
+                    const underlineLevel = lines.length > 0 ? setextHeadingLevel(l) : undefined;
                     if (underlineLevel !== undefined) {
                         setextLevel = underlineLevel;
                         setextEnd = scanner.currentLineEnd();
@@ -615,7 +615,7 @@ function trimTrailingInlineWhitespace(src: string, start: number, end: number): 
     return end;
 }
 
-function getSetextHeadingLevel(line: string): number | undefined {
+export function setextHeadingLevel(line: string): number | undefined {
     let i = 0;
     while (i < 3 && i < line.length && line.charCodeAt(i) === 32) i++;
     if (i >= line.length) return undefined;
